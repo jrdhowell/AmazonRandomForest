@@ -157,7 +157,7 @@ orders_data <- orders_data %>%
 
 ```
 
-  
+#see the results  
    
 ```{r, message=FALSE, warning=FALSE}
 
