@@ -9,7 +9,8 @@ for(libs in install.lib) install.packages(libs, dependences = TRUE)
 sapply(load.libraries, require, character = TRUE)
 
 ```
-
+ 
+#make data anonymous 
 
 ```{r, message=FALSE, warning=FALSE}
 
