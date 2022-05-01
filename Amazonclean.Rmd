@@ -1,5 +1,7 @@
 #my project
 
+#load libraries
+
 ```{r, message=FALSE, warning=FALSE}
 
 
@@ -9,6 +11,8 @@ for(libs in install.lib) install.packages(libs, dependences = TRUE)
 sapply(load.libraries, require, character = TRUE)
 
 ```
+#import data   
+   
    
 ```{r, message=FALSE, warning=FALSE}
 
@@ -34,6 +38,8 @@ orders_data <- merge(orders_data, Id_Conversion, by = "buyer") %>%
 
 ```
 
+#preview the data
+
 ```{r, message=FALSE, warning=FALSE}
 dim(orders_data)
 
@@ -41,7 +47,7 @@ dim(orders_data)
 
 length(unique(orders_data$order_no))
 ```
-
+#preview the data
   
 ```{r, message=FALSE, warning=FALSE}
 colnames(orders_data)
@@ -49,6 +55,8 @@ colnames(orders_data)
 #view a selection of the data
 str(orders_data[1,c("sku", "ship_city", "item_total", "order_date", "description")])
 ```
+
+#clean the data and feature engineering
 
 ```{r, message=FALSE, warning=FALSE}
 
@@ -148,7 +156,8 @@ orders_data <- orders_data %>%
            trimws(vapply(str_split(description, "\\|"), '[', 3, FUN.VALUE = character(1)), which="both")) %>% 
   mutate(description.4 = trimws(vapply(str_split(description, "\\|"), '[', 4, FUN.VALUE = character(1)), which="both"))
 
-
+orders_data[, c("description.1", "description.2", "description.3", "description.4")] <- orders_data %>% 
+  summarise(description.1 = ifelse(is.na(description.1), as.character("none"), description.1), description.2 = ifelse(is.na(description.2), as.character("none"), description.2), description.3 = ifelse(is.na(description.3), as.character("none"), description.3), description.4 = ifelse(is.na(description.4), as.character("none"), description.4))
 
 #revalue function
 my_revalue <- function(x, ...){
@@ -190,3 +199,198 @@ colnames(orders_data)
 
 str(orders_data[1, c("sku", "ship_city", "item_total", "order_date", "description.1", "gender", "item_type")])
 ```
+
+
+
+
+
+
+#Imputing the missing data
+
+
+
+```{r, message=FALSE, warning=FALSE}
+
+na.cols <- which(colSums(is.na(orders_data)) > 0)
+
+
+#see the missing data count
+orders_data[na.cols] %>% 
+  is.na() %>% 
+  colSums() %>%
+  sort(decreasing = TRUE)
+
+```
+
+#Variables cod, shipping_fee, and item_total have 124, 26 and 18 missing entries respectively    
+ 
+  
+
+  
+#Helper functions.
+
+  
+```{r, message=FALSE, warning=FALSE}
+
+#getmode function to find modes
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+#function to locate the nulls
+getNa <- function(data_in, i) {
+  data <- which(is.na(data_in[[i]]))
+  return (data)
+}
+
+```
+
+
+
+  
+#item_total
+  
+```{r, message=FALSE, warning=FALSE}
+
+#completing null item_total values with most common item_total values
+#from obersavtions that share the same SKU value
+
+item_total.na <-getNa(orders_data, "item_total")
+
+orders_data[item_total.na, c("sku", "item_total")] <- orders_data %>%   group_by(sku) %>% 
+  mutate(item_mode = getmode(item_total)) %>% 
+  ungroup() %>% 
+  summarise(sku[item_total.na], item_total = item_mode[item_total.na])
+
+paste("There are", length(which(is.na(orders_data$item_total))), "null entries in item_total", sep=" ")
+
+
+
+#completing null item_total values with most common item_total values
+#from obersavtions that share the same description.1 value
+
+item_total.na <-getNa(orders_data, "item_total")
+
+orders_data[item_total.na, c("description.1", "item_total")] <- orders_data %>% 
+  group_by(description.1) %>% 
+  mutate(item_mode = getmode(item_total)) %>% 
+  ungroup() %>% 
+  summarise(description.1[item_total.na], item_total = item_mode[item_total.na])
+
+paste("There are", length(which(is.na(orders_data$item_total))), "null entries in item_total", sep=" ")
+
+
+
+#completing null item_total values with most common item_total value
+
+item_total.na <-getNa(orders_data, "item_total")
+
+orders_data[item_total.na, c("item_total")] <- orders_data %>% 
+  summarise(item_total = getmode(item_total))
+
+
+paste("There are", length(which(is.na(orders_data$item_total))), "null entries in item_total", sep=" ")
+
+```
+
+
+#shipping_fee
+
+
+```{r, message=FALSE, warning=FALSE}
+
+
+
+paste("There are", length(which(is.na(orders_data$shipping_fee))), "null entries in shipping_fee", sep=" ")
+
+
+
+#replace NA shipping fee with most common shipping fees when sharing 
+# other similar skus and cities variables
+
+shipping_fee.na <- getNa(orders_data, "shipping_fee")
+
+orders_data[shipping_fee.na, c("sku", "shipping_fee", "ship_city")] <- orders_data %>% 
+  group_by(sku, ship_city) %>% 
+  mutate(item_mode = getmode(shipping_fee)) %>% 
+  ungroup() %>% 
+  summarise(sku[shipping_fee.na], shipping_fee = item_mode[shipping_fee.na], ship_city = ship_city[shipping_fee.na])
+
+paste("There are", length(which(is.na(orders_data$shipping_fee))), "null entries in shipping_fee", sep=" ")
+
+#replace NA shipping fee with most common shipping fees when sharing 
+# other similar skus and ship_states variables
+
+shipping_fee.na <- getNa(orders_data, "shipping_fee")
+
+orders_data[shipping_fee.na, c("sku", "shipping_fee", "ship_state")] <- orders_data %>% 
+  group_by(sku, ship_state ) %>% 
+  mutate(item_mode = getmode(shipping_fee)) %>% 
+  ungroup() %>% 
+  summarise(sku[shipping_fee.na], shipping_fee = item_mode[shipping_fee.na], ship_state = ship_state[shipping_fee.na])
+
+paste("There are", length(which(is.na(orders_data$shipping_fee))), "null entries in shipping_fee", sep=" ")
+
+
+#replace NA shipping fee with most common shipping fees when sharing 
+# other matching skus
+
+shipping_fee.na <- getNa(orders_data, "shipping_fee")
+
+orders_data[shipping_fee.na, c("sku", "shipping_fee")] <- orders_data %>% 
+  group_by(sku) %>% 
+  mutate(item_mode = getmode(shipping_fee)) %>% 
+  ungroup() %>% 
+  summarise(sku[shipping_fee.na], shipping_fee = item_mode[shipping_fee.na])
+
+
+paste("There are", length(which(is.na(orders_data$shipping_fee))), "null entries in shipping_fee", sep=" ")
+
+
+
+#replace NA shipping fee with most common shipping fees when sharing 
+# other matching ship_city variable
+
+
+shipping_fee.na <- getNa(orders_data, "shipping_fee")
+
+orders_data[shipping_fee.na, c("ship_city", "shipping_fee")] <- orders_data %>% 
+  group_by(ship_city) %>% 
+  mutate(item_mode = getmode(shipping_fee)) %>% 
+  ungroup() %>% 
+  summarise(ship_city[shipping_fee.na], shipping_fee = item_mode[shipping_fee.na])
+
+
+paste("There are", length(which(is.na(orders_data$shipping_fee))), "null entries in shipping_fee", sep=" ")
+
+
+#replace NA shipping fee with most common shipping fees when sharing 
+# other matching ship_state variables
+
+shipping_fee.na <- getNa(orders_data, "shipping_fee")
+
+orders_data[shipping_fee.na, c("ship_state", "shipping_fee")] <- orders_data %>% 
+  group_by(ship_state) %>% 
+  mutate(item_mode = getmode(shipping_fee)) %>% 
+  ungroup() %>% 
+  summarise(ship_state[shipping_fee.na], shipping_fee = item_mode[shipping_fee.na])
+
+paste("There are", length(which(is.na(orders_data$shipping_fee))), "null entries in shipping_fee", sep=" ")
+
+```
+
+
+
+#cod
+
+```{r, message=FALSE, warning=FALSE}
+
+orders_data$cod[is.na(orders_data$cod)] <- 'Cash in advance'
+
+na.cols <- which(colSums(is.na(orders_data)) > 0)
+
+paste("There are", length(na.cols), "columns with null data")
+
+```
+
