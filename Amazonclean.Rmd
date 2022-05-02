@@ -249,7 +249,7 @@ getNa <- function(data_in, i) {
 
 
   
-#item_total
+#imputing null data in variable: item_total
   
 ```{r, message=FALSE, warning=FALSE}
 
@@ -295,7 +295,7 @@ paste("There are", length(which(is.na(orders_data$item_total))), "null entries i
 ```
 
 
-#shipping_fee
+#imputing null data in variable: shipping_fee
 
 
 ```{r, message=FALSE, warning=FALSE}
@@ -382,7 +382,7 @@ paste("There are", length(which(is.na(orders_data$shipping_fee))), "null entries
 
 
 
-#cod
+#imputing null data in variable: cod
 
 ```{r, message=FALSE, warning=FALSE}
 
@@ -394,3 +394,174 @@ paste("There are", length(na.cols), "columns with null data")
 
 ```
 
+#Helper functions for the plots.
+
+```{r, message=FALSE, warning=FALSE}
+ 
+plotHist <- function(data_in, i) {
+  data <- data.frame(x=data_in[[i]])
+  p <- ggplot(data=data, aes(x=factor(x))) + stat_count(color="red", fill="red") + xlab(colnames(data_in[i])) + theme_light() + 
+      theme(axis.text.x = element_text(angle = 30, hjust =1))
+  return (p)
+}
+
+plotHist.nolabs <- function(data_in, i) {
+  data <- data.frame(x=data_in[[i]])
+  p <- ggplot(data=data, aes(x=factor(x))) + stat_count(color="red", fill="red") + xlab(colnames(data_in[i])) + theme_light() + 
+      theme(axis.text.x = element_blank())
+  return (p)
+}
+
+plotHist.ninety <- function(data_in, i) {
+  data <- data.frame(x=data_in[[i]])
+  p <- ggplot(data=data, aes(x=factor(x))) + stat_count(color="red",  fill="red") + xlab(colnames(data_in[i])) + theme_light() + 
+      theme(axis.text.x = element_text(angle = 90, hjust =1))
+  return (p)
+}
+doPlots <- function(data_in, fun, ii, ncol=3) {
+  pp <- list()
+  for (i in ii) {
+    p <- fun(data_in=data_in, i=i)
+    pp <- c(pp, list(p))
+  }
+  do.call("grid.arrange", c(pp, ncol=ncol))
+}
+
+
+```
+
+#Visualize the data.
+
+```{r, message=FALSE, warning=FALSE}
+doPlots(orders_data, plotHist.nolabs, c("ship_state", "ship_city", "buyer", "sku", "description", "description.1", "description.2", "order_date"))
+```
+
+#Observation(s): There was a popular SKU. Let's look closer.
+
+```{r, message=FALSE, warning=FALSE}
+orders_data[c("sku", "description.1", "description.2", "order_no", "quantity")] %>% 
+  group_by(sku) %>% 
+  summarise(x = sum(quantity), descr = unique(description.1)) %>% 
+  arrange(-x) %>% 
+  ggplot(aes(x=sku,y=x)) + geom_bar(stat="identity", color="black", fill="red")  +
+  labs(title="Total Sales of each SKU",x="SKU", y = "Units sold") +
+  theme(axis.text.x = element_text(angle = 90, hjust =1))
+```
+
+
+
+```{r, message=FALSE, warning=FALSE}
+
+product <- orders_data[c("sku", "description.1", "description.2", "order_no", "quantity")] %>% 
+  group_by(sku) %>% 
+  mutate(x = sum(quantity)) %>% 
+  ungroup() %>%
+  filter(x == max(x)) %>% 
+  group_by(sku) %>% 
+  summarise(description.1 = unique(description.1), description.2 = unique(description.2), x = unique(x))
+
+paste("With a total sold of ", product["x"], ", the most popular product, by far, is SKU:  ", product["sku"], "  Description: ", toupper(product["description.1"]), sep = "")
+
+
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+
+doPlots(orders_data, plotHist, c("order_status", "cod", "gender", "quantity", "item_type", "tod"))
+```
+
+
+#Observation(s): Most orders were for only one item. item_type and gender appear to represent the same data. 
+
+```{r, message=FALSE, warning=FALSE}
+doPlots(orders_data, plotHist.nolabs, c("shipping_fee", "item_total"))
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+orders_data %>%
+  group_by(month) %>%
+  summarise(Total_Sales = sum(item_total)) %>%
+  ggplot(aes(x=month, y=Total_Sales)) + geom_bar(stat="identity", fill = "red", position=position_dodge()) + scale_fill_discrete(name = "", labels = c("Week", "Weekend")) +
+labs(title="Busiest Month",x="Month", y = "sales")+
+  theme(axis.text.x = element_text(angle = 45, hjust =1))
+
+```
+
+
+#Observation(s): December makes up an estimated third of the total sales. 
+
+
+
+#Visualizing our target variable order_status. 
+
+```{r, message=FALSE, warning=FALSE}
+orders_data %>%
+  group_by(cod, order_status) %>% 
+  summarise(orders = sum(length(unique(order_no)))) %>% 
+  ggplot(aes(x=cod, y=orders, fill=order_status)) + geom_bar(stat="identity", position=position_dodge()) + scale_fill_discrete(name = "Order Status", labels = c("Delivered to buyer", "Returned to seller")) +
+  labs(title="Payment Method",x="", y = "Order count")+
+  theme()
+
+
+orders_data %>%
+  group_by(item_type, order_status) %>% 
+  summarise(orders = sum(length(unique(order_no)))) %>% 
+  ggplot(aes(x=item_type, y=orders, fill=order_status)) + geom_bar(stat="identity", position=position_dodge()) + scale_fill_discrete(name = "Order Status", labels = c("Delivered to buyer", "Returned to seller")) +
+  labs(title="Item Type",x="", y = "Order count")+
+  theme()
+
+
+orders_data %>%
+  group_by(tod, order_status) %>% 
+  summarise(orders = sum(length(unique(order_no)))) %>% 
+  ggplot(aes(x=tod, y=orders, fill=order_status)) + geom_bar(stat="identity", position=position_dodge()) + scale_fill_discrete(name = "Order Status", labels = c("Delivered to buyer", "Returned to seller")) +
+  labs(title="Time of Day the Order was Made",x="", y = "Order count")+
+  theme()
+
+
+orders_data %>%
+  group_by(month, order_status) %>% 
+  summarise(orders = sum(length(unique(order_no)))) %>% 
+  ggplot(aes(x=month, y=orders, fill=order_status)) + geom_bar(stat="identity", position=position_dodge()) + scale_fill_discrete(name = "Order Status", labels = c("Delivered to buyer", "Returned to seller")) +
+  labs(title="Months and Order Status",x="", y = "Order count")+
+  theme(axis.text.x = element_text(angle = 45, hjust =1))
+
+
+
+
+#showing number of canceled orders in different item total buckets
+
+
+orders_data %>%
+  mutate(price = ifelse(orders_data$item_total<300, as.character('0-300'),
+                        ifelse( orders_data$item_total<400, as.character('300-400'), 
+                                ifelse(orders_data$item_total<500, as.character('400-500'), as.character("above500"))))) %>% 
+  group_by(price, order_status) %>% 
+  summarise(order_total = sum(length(order_no))) %>% 
+  ggplot(aes(x=price, y=order_total, fill=order_status)) + geom_histogram(stat="identity", position=position_dodge()) + scale_fill_discrete(name = "Order Status", labels = c("Delivered to buyer", "Returned to seller")) +
+  labs(title="Order Total Price",x="", y = "Order count", caption = "x in INR")+
+  theme()
+
+```
+
+
+
+
+
+#Observation(s): From the tables above, variables cod, item_type, tod, month and item_total all show importance on whether a shipment was accepted or rejected. 
+
+
+
+
+
+#Pearson's Chi-square test of independence
+
+```{r, message=FALSE, warning=FALSE}
+
+chisq.test(table(orders_data$item_type, orders_data$gender))
+
+
+chisq.test(table(orders_data$ship_state, orders_data$ship_city))
+```
