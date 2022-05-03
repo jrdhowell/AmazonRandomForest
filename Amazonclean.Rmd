@@ -565,3 +565,211 @@ chisq.test(table(orders_data$item_type, orders_data$gender))
 
 chisq.test(table(orders_data$ship_state, orders_data$ship_city))
 ```
+
+#modeling
+  
+  
+```{r}
+
+classes <- unique(orders_data$order_status)
+
+paste("There are", sum(length(orders_data$order_status)), "total observations. There are only", sum(length(orders_data$order_status[orders_data$order_status != as.character('Delivered to buyer')])), "observations, or", round((sum(length(orders_data$order_status[orders_data$order_status != as.character('Delivered to buyer')])) /  sum(length(orders_data$order_status)) ) * 100, digits = 2), "percent, where the shipments were rejected") 
+```
+
+#Choosing the relevant variables.
+  
+```{r, message=FALSE, warning=FALSE}
+df_model <- orders_data[c("order_status", "item_total", "shipping_fee", "ship_city", "item_type", "cod", "month", "tod")]
+
+```
+
+#Change categorical variables to factors.
+
+```{r, message=FALSE, warning=FALSE}
+
+#characters to factors
+for(i in 1:ncol(df_model)){
+  if (is.character(df_model[,i])){
+    df_model[,i] <- as.factor(df_model[,i])
+  }
+}
+
+
+```
+
+#Getting dummy data
+  
+```{r, message=FALSE, warning=FALSE}
+
+# Make dummy variables of two columns:
+dataf <- dummy_cols(df_model, select_columns = c("ship_city", "item_type", "cod", "month", "tod"))
+
+dataf <- dataf %>% 
+  subset(select = -c(cod, item_type, month, ship_city, tod))
+
+dataf <- clean_names(dataf)
+
+```
+
+#Train/Test split and balancing data.
+  
+```{r, message=FALSE, warning=FALSE}
+set.seed(123)
+trainIndex <- createDataPartition(dataf$order_status, p = .7,
+                                  list = FALSE,
+                                  times = 1)
+train <- dataf[ trainIndex,]
+test <- dataf[-trainIndex,]
+
+#up sampling data
+trainup<-upSample(x=train[,-ncol(train)],
+                  y=train$order_status)
+
+testup<-upSample(x=test[,-ncol(test)],
+                 y=test$order_status)
+
+
+
+
+trainup <- trainup %>% 
+  subset(select = -c(Class))
+
+testup <- testup %>% 
+  subset(select = -c(Class))
+```
+
+#Random Forest.
+
+```{r, message=FALSE, warning=FALSE}
+
+set.seed(123)
+output.forest <- randomForest(order_status~., data = trainup)
+
+
+# View the forest results.
+print(output.forest) 
+
+#make predictions using model
+p2 <- predict(output.forest, test)
+
+confusionMatrix(p2, test$order_status)
+
+```
+
+
+
+
+#tune the model
+  
+  
+#find the best mtry value
+  
+```{r, message=FALSE, warning=FALSE}
+#find the best mtry for random forest
+mtry <- tuneRF(trainup[-1],trainup$order_status, ntreeTry=500,
+               stepFactor=1.5,improve=0.01, trace=TRUE, plot=TRUE)
+best.m <- mtry[mtry[, 2] == min(mtry[, 2]), 1]
+
+print(best.m)
+```
+
+
+
+
+#optimal maxnodes value
+
+
+```{r}
+#looking for best node max pt 1
+store_maxnode <- list()
+tuneGrid <- expand.grid(.mtry = best.m)
+for (maxnodes in c(5: 15)) {
+  set.seed(123)
+  rf_maxnode <- train(order_status~.,
+                      data = trainup,
+                      method = "rf",
+                      metric = "Accuracy",
+                      tuneGrid = tuneGrid,
+                      importance = TRUE,
+                      nodesize = best.m,
+                      maxnodes = maxnodes,
+                      ntree = 500)
+  current_iteration <- toString(maxnodes)
+  store_maxnode[[current_iteration]] <- rf_maxnode
+}
+results_mtry <- resamples(store_maxnode)
+summary(results_mtry)
+
+#looking for best node max pt 2
+store_maxnode <- list()
+tuneGrid <- expand.grid(.mtry = best.m)
+for (maxnodes in c(15: 30)) {
+  set.seed(123)
+  rf_maxnode <- train(order_status~.,
+                      data = trainup,
+                      method = "rf",
+                      metric = "Accuracy",
+                      tuneGrid = tuneGrid,
+                      importance = TRUE,
+                      nodesize = best.m,
+                      maxnodes = maxnodes,
+                      ntree = 500)
+  current_iteration <- toString(maxnodes)
+  store_maxnode[[current_iteration]] <- rf_maxnode
+}
+results_mtry <- resamples(store_maxnode)
+summary(results_mtry)
+
+```
+
+#number of trees
+
+```{r, message=FALSE, warning=FALSE}
+
+#looking for best number of trees
+store_maxtrees <- list()
+for (ntree in c(250, 300, 350, 400, 450, 500, 550, 600, 800, 1000, 2000)) {
+  set.seed(123)
+  rf_maxtrees <- train(order_status~.,
+                       data = trainup,
+                       method = "rf",
+                       metric = "Accuracy",
+                       tuneGrid = tuneGrid,
+                       importance = TRUE,
+                       nodesize = best.m,
+                       maxnodes = 21,
+                       ntree = ntree)
+  key <- toString(ntree)
+  store_maxtrees[[key]] <- rf_maxtrees
+}
+results_tree <- resamples(store_maxtrees)
+summary(results_tree)
+```
+
+
+#optimal random forest
+  
+```{r}
+set.seed(123)
+output.forest <-randomForest(order_status~.,data=trainup, mtry=best.m , importance = TRUE,  ntree=300, maxnodes = 21)
+print(output.forest)
+
+
+p2 <- predict(output.forest, test)
+
+
+confusionMatrix(p2, test$order_status)
+
+```
+
+
+
+#variable importance
+
+```{r, message=FALSE, warning=FALSE}
+
+varImpPlot(output.forest,
+           n.var = 10)
+```
+
+
