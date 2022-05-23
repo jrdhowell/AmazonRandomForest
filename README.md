@@ -57,12 +57,12 @@ Following the observations from the EDA and a Chi-Square test, the following var
 * month
 * tod
 
-THe following steps were taken to create the model:
+The following steps were taken to create the model:
 
 * create dummy variables for catagorical variables
 * split the data into a train and test set
 * performed upsampling on the data to address the imbalance to the target variable
-* Tune the model via gridsearch method to find optimal parameters for mtry, maxnodes and ntree count
+* tune the model via gridsearch method to find optimal parameters for mtry, maxnodes and ntree count
 
 
 ## Results
