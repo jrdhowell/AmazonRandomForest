@@ -25,7 +25,7 @@ The data set from Kaggle required cleaning before it could be used. The followin
 * Based on descriptive words in the description (ie lipstick, jewelry box, purse, etc), engineered "item_type" variable to track type of product
 * Created variables to track the time of day and month an order was made
 
-## Immputing missing data
+## Imputing missing data
 
 There were null entries in the shipping_fee, item_total and cod variables. For both shipping_fee and item_total, an irritative process was used to determine how to imput the data.
 For example, for item_total, if other observations shared the same SKU as the null data, the item_total of the shared SKU was used to imput the missing data. 
